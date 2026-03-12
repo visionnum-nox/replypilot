@@ -72,10 +72,30 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState(defaultTemplates)
   const [rules, setRules] = useState(escalationRules)
   const [saved, setSaved] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [profile, setProfile] = useState({
+    companyName: '',
+    industry: '',
+    services: '',
+    tone: 'freundlich',
+    doNotPromise: '',
+    bookingLink: '',
+    ownerName: '',
+  })
 
   const handleSave = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleProfileSave = async () => {
+    await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...profile, tone: selectedTone }),
+    })
+    setProfileSaved(true)
+    setTimeout(() => setProfileSaved(false), 2000)
   }
 
   const toggleTemplate = (id: string) => {
@@ -92,7 +112,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">KI-Einstellungen</h1>
-          <p className="text-muted-foreground mt-0.5">Konfigurieren Sie Ton, Vorlagen und Eskalationsregeln</p>
+          <p className="text-muted-foreground mt-0.5">Konfigurieren Sie Ihr Business-Profil, Ton und Eskalationsregeln</p>
         </div>
         <Button onClick={handleSave} className="gap-2">
           {saved ? (
@@ -108,6 +128,50 @@ export default function SettingsPage() {
           )}
         </Button>
       </div>
+
+      {/* Business Profil */}
+      <Card className="border-border shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bot className="h-5 w-5 text-green-500" />
+            🏢 Business-Profil — KI trainieren
+          </CardTitle>
+          <CardDescription>Je mehr die KI über Ihr Unternehmen weiß, desto besser werden die Antworten.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Firmenname</label>
+              <input className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="z.B. Elektro Müller GmbH" value={profile.companyName} onChange={e => setProfile(p => ({...p, companyName: e.target.value}))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Branche</label>
+              <input className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="z.B. Elektriker, Coach, Makler..." value={profile.industry} onChange={e => setProfile(p => ({...p, industry: e.target.value}))} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Ihre Leistungen & Preise</label>
+            <textarea className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[80px]" placeholder="z.B. Elektroinstallation ab 89€/h, Notdienst 24/7, Badezimmer-Renovierung..." value={profile.services} onChange={e => setProfile(p => ({...p, services: e.target.value}))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Ansprechpartner</label>
+              <input className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="z.B. Thomas Müller" value={profile.ownerName} onChange={e => setProfile(p => ({...p, ownerName: e.target.value}))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Terminbuchungs-Link</label>
+              <input className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="z.B. calendly.com/ihr-name" value={profile.bookingLink} onChange={e => setProfile(p => ({...p, bookingLink: e.target.value}))} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Was soll die KI NICHT versprechen?</label>
+            <input className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="z.B. keine Festpreisgarantien, keine Sofortzusagen bei Großprojekten" value={profile.doNotPromise} onChange={e => setProfile(p => ({...p, doNotPromise: e.target.value}))} />
+          </div>
+          <Button onClick={handleProfileSave} className="gap-2 bg-green-600 hover:bg-green-700">
+            {profileSaved ? <><CheckCircle2 className="h-4 w-4" /> KI trainiert!</> : <><Save className="h-4 w-4" /> KI-Profil speichern</>}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* KI Grundeinstellungen */}
       <Card className="border-border shadow-none">

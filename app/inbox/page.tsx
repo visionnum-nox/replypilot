@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { mockLeads, channelLabels, statusLabels, type Lead } from "@/lib/mock-data"
+import { useState, useEffect, useCallback } from "react"
+import { mockLeads, channelLabels, statusLabels } from "@/lib/mock-data"
+import type { Lead } from "@/lib/mock-data"
+import type { StoredLead } from "@/lib/leads-store"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Mail,
@@ -17,12 +18,12 @@ import {
   Bot,
   User,
   Phone,
-  ChevronRight,
-  Filter,
   Search,
   RefreshCw,
   Inbox
 } from "lucide-react"
+
+type AnyLead = Lead | StoredLead
 
 const channelIcon: Record<string, React.ReactNode> = {
   email: <Mail className="h-4 w-4" />,
@@ -55,12 +56,45 @@ const priorityColor: Record<string, string> = {
 }
 
 export default function InboxPage() {
-  const [selected, setSelected] = useState<Lead | null>(mockLeads[1])
+  const [leads, setLeads] = useState<AnyLead[]>(mockLeads)
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<AnyLead | null>(null)
   const [filter, setFilter] = useState<string>("alle")
+  const [search, setSearch] = useState("")
 
-  const filteredLeads = filter === "alle"
-    ? mockLeads
-    : mockLeads.filter(l => l.status === filter)
+  const loadLeads = useCallback(() => {
+    setLoading(true)
+    fetch("/api/leads")
+      .then((r) => r.json())
+      .then((data: { success: boolean; leads?: StoredLead[] }) => {
+        if (data.success && data.leads && data.leads.length > 0) {
+          setLeads(data.leads)
+          setSelected(data.leads[0] ?? null)
+        } else {
+          setLeads(mockLeads)
+          setSelected(mockLeads[1] ?? null)
+        }
+      })
+      .catch(() => {
+        setLeads(mockLeads)
+        setSelected(mockLeads[1] ?? null)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    loadLeads()
+  }, [loadLeads])
+
+  const filteredLeads = leads.filter((l) => {
+    const matchesFilter = filter === "alle" || l.status === filter
+    const matchesSearch =
+      !search ||
+      l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.email.toLowerCase().includes(search.toLowerCase()) ||
+      l.subject.toLowerCase().includes(search.toLowerCase())
+    return matchesFilter && matchesSearch
+  })
 
   return (
     <div className="flex h-screen">
@@ -70,8 +104,14 @@ export default function InboxPage() {
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold">Posteingang</h1>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <RefreshCw className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={loadLeads}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
           </div>
           {/* Search */}
@@ -80,6 +120,8 @@ export default function InboxPage() {
             <input
               type="text"
               placeholder="Leads durchsuchen..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 rounded-lg border border-border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -90,7 +132,7 @@ export default function InboxPage() {
               { key: "wartend", label: "Wartend" },
               { key: "eskaliert", label: "Eskaliert" },
               { key: "beantwortet", label: "Beantwortet" },
-            ].map(f => (
+            ].map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
@@ -117,7 +159,7 @@ export default function InboxPage() {
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${priorityColor[lead.priority]}`} />
+                <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${priorityColor[(lead as Lead).priority ?? 'mittel']}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
                     <span className="text-sm font-semibold truncate">{lead.name}</span>
@@ -128,15 +170,20 @@ export default function InboxPage() {
                   <p className="text-xs font-medium text-foreground/80 truncate">{lead.subject}</p>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{lead.message}</p>
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-muted-foreground">{channelIcon[lead.channel]}</span>
+                    <span className="text-muted-foreground">{channelIcon[lead.channel] ?? <Globe className="h-4 w-4" />}</span>
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusVariant[lead.status]}`}>
-                      {statusLabels[lead.status]}
+                      {statusLabels[lead.status] ?? lead.status}
                     </span>
                   </div>
                 </div>
               </div>
             </button>
           ))}
+          {filteredLeads.length === 0 && !loading && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Keine Leads gefunden
+            </div>
+          )}
         </div>
       </div>
 
@@ -154,13 +201,8 @@ export default function InboxPage() {
                   <h2 className="text-xl font-bold">{selected.name}</h2>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${statusVariant[selected.status]}`}>
                     {statusIcon[selected.status]}
-                    {statusLabels[selected.status]}
+                    {statusLabels[selected.status] ?? selected.status}
                   </span>
-                  {selected.priority === "hoch" && (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-700 border-0">
-                      Hohe Priorität
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
@@ -180,9 +222,7 @@ export default function InboxPage() {
                   <User className="h-4 w-4 mr-1" />
                   Zuweisen
                 </Button>
-                <Button size="sm">
-                  Antworten
-                </Button>
+                <Button size="sm">Antworten</Button>
               </div>
             </div>
 
@@ -191,13 +231,13 @@ export default function InboxPage() {
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Kanal</p>
                 <p className="text-sm font-semibold mt-0.5 flex items-center gap-1.5">
-                  {channelIcon[selected.channel]}
-                  {channelLabels[selected.channel]}
+                  {channelIcon[selected.channel] ?? <Globe className="h-4 w-4" />}
+                  {channelLabels[selected.channel] ?? selected.channel}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Quelle</p>
-                <p className="text-sm font-semibold mt-0.5">{selected.source}</p>
+                <p className="text-sm font-semibold mt-0.5">{(selected as Lead).source ?? "Website Formular"}</p>
               </div>
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Eingegangen</p>
@@ -206,16 +246,16 @@ export default function InboxPage() {
                     day: "2-digit",
                     month: "2-digit",
                     hour: "2-digit",
-                    minute: "2-digit"
+                    minute: "2-digit",
                   })}
                 </p>
               </div>
             </div>
 
             {/* Tags */}
-            {selected.tags.length > 0 && (
+            {(selected as Lead).tags && (selected as Lead).tags.length > 0 && (
               <div className="flex gap-2 flex-wrap">
-                {selected.tags.map(tag => (
+                {(selected as Lead).tags.map((tag: string) => (
                   <span key={tag} className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     #{tag}
                   </span>
@@ -272,6 +312,18 @@ export default function InboxPage() {
                       Manuell antworten
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Notes (if present) */}
+            {(selected as StoredLead).notes && (
+              <Card className="border-border shadow-none">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <span className="text-sm font-semibold">Notizen</span>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <p className="text-sm leading-relaxed text-muted-foreground">{(selected as StoredLead).notes}</p>
                 </CardContent>
               </Card>
             )}
